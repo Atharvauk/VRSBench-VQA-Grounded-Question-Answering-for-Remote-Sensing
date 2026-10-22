@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OrbitAsk</title>
+<meta name="description" content="OrbitAsk: grounded visual question answering for satellite imagery. MSc project by Atharva Kalase, Queen's University Belfast.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..900&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: one reading column with full-bleed bands; detection-box corner brackets are the recurring mark. */
+:root {
+  --bg: #ffffff;
+  --surface: #f6f3f2;
+  --surface-2: #ece7e6;
+  --fg: #16171b;
+  --muted: #555a63;
+  --line: #e2dcdb;
+  --accent: #d9201a;
+  --accent-ink: #b0140f;
+  --accent-soft: #fde9e7;
+  --accent-2: #f08079;
+  --on-accent: #ffffff;
+  --bar-base: #b9b4b4;
+  --bar-7b: #6b6f78;
+  --bar-7bbox: #9a8f8d;
+  --ok: #1d7a45;
+  --bad: #b0140f;
+  --display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --maxw: 1120px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121316; --surface: #1b1c21; --surface-2: #24252b; --fg: #eeedeb; --muted: #a6a9b0;
+    --line: #2d2f36; --accent: #ff4b3e; --accent-ink: #ff7a6f; --accent-soft: #3a1d1b; --accent-2: #b8463f; --on-accent: #ffffff;
+    --bar-base: #6f6b6b; --bar-7b: #9ba0aa; --bar-7bbox: #b3a8a6; --ok: #5fd08f; --bad: #ff7a6f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121316; --surface: #1b1c21; --surface-2: #24252b; --fg: #eeedeb; --muted: #a6a9b0;
+  --line: #2d2f36; --accent: #ff4b3e; --accent-ink: #ff7a6f; --accent-soft: #3a1d1b; --accent-2: #b8463f; --on-accent: #ffffff;
+  --bar-base: #6f6b6b; --bar-7b: #9ba0aa; --bar-7bbox: #b3a8a6; --ok: #5fd08f; --bad: #ff7a6f;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 1.0625rem; line-height: 1.6; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.band { padding-block: clamp(48px, 7vw, 88px); }
+.band.alt { background: var(--surface); }
+h1, h2, h3 { font-family: var(--display); font-stretch: 112%; line-height: 1.05; margin: 0; text-wrap: balance; }
+h2 { font-size: clamp(1.9rem, 4.2vw, 2.9rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.25rem; font-weight: 750; font-stretch: 105%; }
+p { margin: 0; }
+a { color: var(--accent-ink); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.section-head { display: grid; gap: 14px; margin-bottom: clamp(28px, 4vw, 44px); max-width: 760px; }
+.section-head p { color: var(--muted); font-size: 1.12rem; max-width: 65ch; }
+.mono { font-family: var(--mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* corner-bracket mark: the detection box */
+.bracket { position: relative; }
+.bracket::before, .bracket::after { content: ""; position: absolute; width: 18px; height: 18px; border: 3px solid var(--accent); pointer-events: none; }
+.bracket::before { top: -7px; left: -7px; border-right: 0; border-bottom: 0; }
+.bracket::after { bottom: -7px; right: -7px; border-left: 0; border-top: 0; }
+
+/* hero */
+.hero { padding-block: clamp(36px, 6vw, 72px) clamp(40px, 6vw, 72px); }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
+.hero-text { min-width: 0; container-type: inline-size; }
+.hero h1 { font-size: clamp(2.8rem, 7.5vw, 5.4rem); font-weight: 900; font-stretch: 100%; letter-spacing: -0.02em; color: var(--accent); line-height: 0.95; max-width: 100%; }
+@supports (width: 1cqi) { .hero h1 { font-size: clamp(2.8rem, 17cqi, 6.2rem); } }
+.hero .lede { font-size: clamp(1.3rem, 2.6vw, 1.75rem); line-height: 1.3; font-weight: 600; margin-top: 18px; max-width: 30ch; }
+.hero .byline { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); }
+.hero .byline strong { color: var(--fg); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.chip { font-family: var(--mono); font-size: 0.8rem; padding: 5px 11px; border: 1.5px solid var(--line); border-radius: 999px; color: var(--fg); background: var(--bg); }
+.hero-figure { margin: 0; }
+.hero-figure .frame { border-radius: 6px; overflow: hidden; aspect-ratio: 1 / 1; max-width: 100%; }
+.hero-figure img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.qa-float { position: relative; margin: -64px 18px 0 auto; max-width: 340px; background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.14); }
+.qa-float .q { font-weight: 600; }
+.qa-float .a { font-family: var(--display); font-weight: 800; font-size: 1.6rem; color: var(--accent); margin-top: 2px; }
+.qa-float small { color: var(--muted); font-size: 0.82rem; }
+
+/* key numbers */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.stat { background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 18px 18px 16px; display: grid; gap: 6px; align-content: start; }
+.stat.lead { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.stat .big { font-family: var(--display); font-weight: 850; font-stretch: 100%; font-size: clamp(1.6rem, 2.7vw, 2.15rem); line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.stat.lead .big { color: var(--on-accent); }
+.stat p { font-size: 0.98rem; }
+.stats-note { margin-top: 14px; color: var(--muted); font-size: 0.92rem; }
+
+/* use cases */
+.uses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.use { background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 10px; align-content: start; }
+.use .icon { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
+.use .icon svg { width: 24px; height: 24px; fill: var(--on-accent); }
+.use .ask { font-style: italic; color: var(--accent-ink); font-weight: 600; }
+.use p.who { color: var(--muted); font-size: 0.95rem; }
+.note { margin-top: 16px; color: var(--muted); font-size: 0.92rem; }
+
+/* pipeline */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: step; }
+.step { position: relative; padding: 20px 18px 18px; border-top: 4px solid var(--line); display: grid; gap: 8px; align-content: start; }
+.step.on { border-top-color: var(--accent); }
+.step .k { font-family: var(--mono); font-size: 0.8rem; color: var(--accent-ink); letter-spacing: 0.06em; text-transform: uppercase; }
+.step .what { color: var(--muted); font-size: 0.98rem; }
+.step .fact { font-family: var(--mono); font-size: 0.82rem; background: var(--surface-2); border-radius: 4px; padding: 6px 8px; color: var(--fg); }
+.band.alt .step .fact { background: var(--bg); }
+.output { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 16px 18px; border: 2px solid var(--accent); border-radius: 8px; }
+.output .label { font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.output .pill { padding: 4px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+
+/* explorer */
+.explore { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 48px); align-items: start; }
+.scene { position: relative; border-radius: 6px; overflow: hidden; aspect-ratio: 1 / 1; max-width: 100%; }
+.scene img { display: block; width: 100%; height: 100%; }
+.hl { position: absolute; border: 3px solid transparent; border-radius: 2px; transition: border-color .2s, box-shadow .2s; pointer-events: none; }
+.hl.on { border-color: #ff2bd6; box-shadow: 0 0 0 9999px rgba(0,0,0,0.38); }
+.scene .tag { position: absolute; left: 10px; bottom: 10px; font-family: var(--mono); font-size: 0.75rem; background: rgba(0,0,0,0.65); color: #fff; padding: 4px 8px; border-radius: 4px; }
+.refs-list, .qa-list { display: grid; gap: 10px; }
+.objref { text-align: left; font: inherit; color: inherit; background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.objref:hover, .objref[aria-pressed="true"] { border-color: var(--accent); }
+.objref .id { font-family: var(--mono); font-weight: 600; font-size: 0.85rem; background: var(--surface-2); padding: 2px 8px; border-radius: 4px; }
+.band.alt .objref .id { background: var(--surface); }
+.qa { background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.qa summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.qa summary::-webkit-details-marker { display: none; }
+.qa summary::after { content: "Show answer"; font-family: var(--mono); font-size: 0.75rem; color: var(--accent-ink); white-space: nowrap; padding-top: 3px; }
+.qa[open] summary::after { content: "Hide"; }
+.qa .ans { margin-top: 8px; font-family: var(--display); font-weight: 800; font-size: 1.35rem; color: var(--accent); }
+.sub-h { font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 6px 0 2px; }
+.credit { color: var(--muted); font-size: 0.88rem; margin-top: 10px; }
+
+/* charts */
+.charts { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(24px, 4vw, 48px); align-items: start; }
+.card { background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: clamp(16px, 2.5vw, 24px); min-width: 0; }
+.card h3 { margin-bottom: 4px; }
+.card .cap { color: var(--muted); font-size: 0.92rem; margin-bottom: 16px; }
+.lb { display: grid; gap: 10px; }
+.lb-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 12px; align-items: center; }
+.lb-row .name { font-size: 0.98rem; text-align: right; }
+.lb-row.ours .name { color: var(--accent-ink); font-weight: 700; }
+.track { position: relative; height: 26px; }
+.bar { height: 100%; border-radius: 3px; display: flex; align-items: center; justify-content: flex-end; }
+.bar-val { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-weight: 600; font-size: 0.85rem; padding-left: 8px; white-space: nowrap; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.toggle { font: inherit; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.toggle .sw { width: 12px; height: 12px; border-radius: 2px; }
+.toggle[aria-pressed="false"] { opacity: 0.45; }
+.toggle[aria-pressed="false"] .sw { background: transparent !important; outline: 1.5px solid var(--muted); }
+.pt { display: grid; gap: 12px; }
+.pt-row { display: grid; grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr); gap: 12px; align-items: center; }
+.pt-row .name { font-size: 0.95rem; line-height: 1.2; }
+.pt-row .name small { display: block; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.pt-bars { display: grid; gap: 3px; }
+.pt-bars .track { height: 14px; }
+.pt-bars .bar-val { font-size: 0.74rem; padding-left: 6px; }
+.chart-notes { margin-top: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 0.92rem; }
+
+/* examples */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.filter { font: inherit; font-size: 0.92rem; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.filter[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.filter .c { font-family: var(--mono); font-size: 0.78rem; opacity: 0.85; margin-left: 6px; }
+.ex-summary { color: var(--muted); margin-bottom: 16px; font-size: 0.98rem; }
+.ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.ex { background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; align-content: start; }
+.ex .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.ex .img-id { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.ex .kind { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-ink); }
+.ex .q { font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
+.ex dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 0.95rem; }
+.ex dt { color: var(--muted); }
+.ex dd { margin: 0; overflow-wrap: anywhere; }
+.ex .yes { color: var(--ok); font-weight: 700; }
+.ex .no { color: var(--bad); }
+.mark { font-family: var(--mono); font-size: 0.8rem; margin-left: 6px; }
+
+/* learnings */
+.learn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.learn .item { border-left: 0; background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.learn .item .fig { font-family: var(--display); font-weight: 850; font-stretch: 110%; font-size: 1.6rem; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
+.learn .item p { color: var(--muted); }
+
+/* roadmap */
+.road { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.road .phase { padding: 20px; border-radius: 10px; background: var(--surface); display: grid; gap: 8px; align-content: start; }
+.band.alt .road .phase { background: var(--bg); }
+.road .phase .when { font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-ink); }
+
+/* contact */
+.cta { background: var(--accent); color: var(--on-accent); border-radius: 14px; padding: clamp(22px, 4vw, 40px); display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: center; }
+.cta h2 { color: var(--on-accent); }
+.cta p { margin-top: 10px; font-size: 1.1rem; }
+.email-box { background: rgba(255,255,255,0.14); border: 1.5px solid rgba(255,255,255,0.45); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+.email { font-family: var(--mono); font-size: clamp(0.95rem, 2.2vw, 1.1rem); user-select: all; overflow-wrap: anywhere; }
+.copy { justify-self: start; font: inherit; font-weight: 700; padding: 8px 16px; border-radius: 999px; border: 0; background: #ffffff; color: #b0140f; cursor: pointer; }
+.copy-status { font-size: 0.9rem; min-height: 1.2em; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
+.links a { color: var(--on-accent); font-weight: 600; }
+
+/* references + footer */
+.refs { display: grid; gap: 8px; color: var(--muted); font-size: 0.95rem; padding-left: 1.2em; margin: 0; }
+footer { border-top: 1.5px solid var(--line); padding-block: 22px 28px; color: var(--muted); font-size: 0.9rem; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+
+@media (max-width: 900px) {
+  .hero-grid, .explore, .charts, .cta { grid-template-columns: minmax(0, 1fr); }
+  .stats, .uses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; }
+  .road { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .stats, .uses, .learn, .steps { grid-template-columns: minmax(0, 1fr); }
+  .lb-row { grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr); }
+  .lb-row .name { font-size: 0.88rem; }
+  .pt-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .qa-float { margin: -40px 10px 0 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d9201a'/%3E%3Cpath d='M14 26V14h12M38 14h12v12M50 38v12H38M26 50H14V38' fill='none' stroke='white' stroke-width='6'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OrbitAsk: grounded visual question answering for satellite imagery">
+<meta property="og:description" content="Ask a satellite image a question in plain English. Get the answer, and the boxes that prove it. MSc project by Atharva Kalase, Queen's University Belfast.">
+<meta property="og:image" content="https://atharvauk.github.io/VRSBench-VQA-Grounded-Question-Answering-for-Remote-Sensing/img/vrsbench_sample.jpg">
+<meta property="og:url" content="https://atharvauk.github.io/VRSBench-VQA-Grounded-Question-Answering-for-Remote-Sensing/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <p class="eyebrow">MSc project · Vision &amp; Language · Queen’s University Belfast</p>
+      <h1>OrbitAsk</h1>
+      <p class="lede">Ask a satellite image a question in plain English. Get the answer, and the boxes that prove it.</p>
+      <div class="byline"><span><strong>Atharva Kalase</strong></span><span>MSc Data Science &amp; Artificial Intelligence</span><span>School of EEECS</span></div>
+      <div class="chips" aria-label="Built with">
+        <span class="chip">Grounding DINO</span><span class="chip">Qwen2.5-VL</span><span class="chip">QLoRA</span><span class="chip">VRSBench</span>
+      </div>
+    </div>
+    <figure class="hero-figure">
+      <div class="frame bracket"><img src="img/vrsbench_sample.jpg" alt="Aerial photo of a waterfront with houses, small vehicles and three harbors, each object outlined with a numbered box" width="819" height="819"></div>
+      <div class="qa-float" role="note">
+        <p class="q">Q: How many harbors are visible?</p>
+        <p class="a">3</p>
+        <small>VRSBench sample, with its ground-truth object boxes</small>
+      </div>
+    </figure>
+  </div>
+</header>
+
+<section class="band alt" id="results-at-a-glance" aria-labelledby="glance-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">At a glance</p>
+      <h2 id="glance-h">What my evaluation found</h2>
+    </div>
+    <div class="stats">
+      <div class="stat lead"><span class="big">56.7%</span><p>Best result: the 7B model fine-tuned with QLoRA, up from 51.3% zero-shot. An LLM judge scores it at 66.7%.</p></div>
+      <div class="stat"><span class="big">50.8% ≈ 51.3%</span><p>A 3B model fine-tuned with QLoRA nearly matches the 7B zero-shot model, at under half the size.</p></div>
+      <div class="stat"><span class="big">8% → 31%</span><p>Counting accuracy of the 3B model after QLoRA fine-tuning.</p></div>
+      <div class="stat"><span class="big">75%</span><p>Of the answers the self-check flags are truly wrong. It flags 11.8% of answers.</p></div>
+    </div>
+    <p class="stats-note">1,000 questions from the VRSBench test split, scored by exact match unless stated otherwise.</p>
+  </div>
+</section>
+
+<section class="band" id="why" aria-labelledby="why-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Why it matters</p>
+      <h2 id="why-h">Imagery arrives faster than anyone can read it</h2>
+      <p>After a flood, or before a census, there are more satellite tiles than analysts can inspect. General vision-language models learn mostly from ground-level photos; seen from above, objects are tiny, rotated and densely packed. OrbitAsk lets anyone ask what is in a tile and check the answer against the boxes it was based on.</p>
+    </div>
+    <div class="uses">
+      <article class="use">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21.98 14H22h-.02zM5.35 13c1.19 0 1.42 1 3.33 1 1.95 0 2.09-1 3.33-1 1.19 0 1.42 1 3.33 1 1.95 0 2.09-1 3.33-1 1.19 0 1.4.98 3.31 1v-2c-1.19 0-1.42-1-3.33-1-1.95 0-2.09 1-3.33 1-1.19 0-1.42-1-3.33-1-1.95 0-2.09 1-3.33 1-1.19 0-1.42-1-3.33-1-1.95 0-2.09 1-3.33 1v2c1.9 0 2.17-1 3.35-1zm13.32 2c-1.95 0-2.09 1-3.33 1-1.19 0-1.42-1-3.33-1-1.95 0-2.1 1-3.34 1s-1.38-1-3.33-1-2.1 1-3.34 1v2c1.95 0 2.11-1 3.34-1 1.24 0 1.38 1 3.33 1 1.95 0 2.1-1 3.34-1 1.19 0 1.42 1 3.33 1 1.94 0 2.09-1 3.33-1 1.19 0 1.42 1 3.33 1v-2c-1.24 0-1.38-1-3.33-1zM5.35 9c1.19 0 1.42 1 3.33 1 1.95 0 2.09-1 3.33-1 1.19 0 1.42 1 3.33 1 1.95 0 2.09-1 3.33-1 1.19 0 1.4.98 3.31 1V8c-1.19 0-1.42-1-3.33-1-1.95 0-2.09 1-3.33 1-1.19 0-1.42-1-3.33-1-1.95 0-2.09 1-3.33 1-1.19 0-1.42-1-3.33-1C3.38 7 3.24 8 2 8v2c1.9 0 2.17-1 3.35-1z"/></svg></span>
+        <h3>Disaster response</h3>
+        <p class="ask">“How many vehicles are on the bridge?”</p>
+        <p class="who">Fast access and damage checks for emergency teams.</p>
+      </article>
+      <article class="use">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 10v2H8v-2h2zm6 2v-2h-2v2h2zm5 2v7H3v-7c0-1.1.9-2 2-2h1V8c0-1.1.9-2 2-2h1V3h6v3h1c1.1 0 2 .9 2 2v4h1c1.1 0 2 .9 2 2zm-14 0v5h2v-3h6v3h2v-5h-2V8H9v6H7zm4 2v3h2v-3h-2z"/></svg></span>
+        <h3>Census &amp; population</h3>
+        <p class="ask">“How many buildings are in this block?”</p>
+        <p class="who">Building counts that feed population estimates.</p>
+      </article>
+      <article class="use">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg></span>
+        <h3>Urban planning</h3>
+        <p class="ask">“How many cars are parked by the stadium?”</p>
+        <p class="who">Parking, traffic and land-use monitoring.</p>
+      </article>
+      <article class="use">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/></svg></span>
+        <h3>Ports &amp; infrastructure</h3>
+        <p class="ask">“How many ships are docked?”</p>
+        <p class="who">Asset and activity monitoring at scale.</p>
+      </article>
+    </div>
+    <p class="note">These are target uses. Today’s model is trained and tested on VRSBench, which covers 26 object categories such as vehicles, ships, bridges, harbors and storage tanks.</p>
+  </div>
+</section>
+
+<section class="band alt" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2 id="how-h">Ground first, then answer, then check</h2>
+      <p>Each question runs through four stages. The order matters: the language model answers using the objects the detector found, and a final check decides whether a person should look again.</p>
+    </div>
+    <div class="steps">
+      <div class="step on"><span class="k">1 · Ask</span><h3>Image + question</h3><p class="what">A 512 × 512 px aerial tile and a plain-English question.</p><span class="fact">12 question types</span></div>
+      <div class="step on"><span class="k">2 · Ground</span><h3>Grounding DINO</h3><p class="what">An open-set detector draws boxes around the objects the question names.</p><span class="fact">1.39 boxes per question on average</span></div>
+      <div class="step on"><span class="k">3 · Reason</span><h3>Qwen2.5-VL</h3><p class="what">A 3B or 7B vision-language model, fine-tuned with QLoRA (4-bit base + small LoRA adapters), answers from the image and boxes.</p><span class="fact">7B in 4-bit ≈ 6.5 GB of GPU memory</span></div>
+      <div class="step on"><span class="k">4 · Check</span><h3>Self-check</h3><p class="what">A consistency check flags answers that look unreliable so a person can review them.</p><span class="fact">flags 11.8% · 75% of flags are real errors</span></div>
+    </div>
+    <div class="output"><span class="label">Output</span><span class="pill">the answer</span><span class="pill">evidence boxes</span><span class="pill">a trust flag</span></div>
+    <p class="note">The stages were evaluated separately. Testing the full pipeline end to end is the next milestone.</p>
+  </div>
+</section>
+
+<section class="band" id="example" aria-labelledby="ex-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Explore an example</p>
+      <h2 id="ex-h">One VRSBench image, three kinds of annotation</h2>
+      <p>VRSBench pairs every image with object references (each tied to a box), question–answer pairs and a detailed caption. Tap an object to see its box, or open a question to reveal the benchmark answer.</p>
+    </div>
+    <div class="explore">
+      <div>
+        <div class="scene bracket" id="scene">
+          <img src="img/vrsbench_sample.jpg" alt="Waterfront scene used in the example" width="819" height="819">
+          <span class="hl" data-id="1" style="left:29.3%;top:1.1%;width:7.3%;height:7.1%"></span>
+          <span class="hl" data-id="4" style="left:19.7%;top:58.5%;width:9.6%;height:28.7%"></span>
+          <span class="hl" data-id="7" style="left:73.3%;top:60.8%;width:16.8%;height:21%"></span>
+          <span class="tag">512 × 512 px · Google Earth imagery</span>
+        </div>
+        <p class="credit">Image and annotations from VRSBench [1]. Box colours and numbers are the benchmark’s own.</p>
+      </div>
+      <div style="display:grid;gap:18px;min-width:0">
+        <div>
+          <p class="sub-h">Object references</p>
+          <div class="refs-list">
+            <button class="objref" type="button" id="obj-1" data-id="1" aria-pressed="false"><span class="id">ID 1</span><span>The small vehicle that is the farthest to the top.</span></button>
+            <button class="objref" type="button" id="obj-4" data-id="4" aria-pressed="false"><span class="id">ID 4</span><span>The harbor on the left side of the scene, with multiple docks extending into the water.</span></button>
+            <button class="objref" type="button" id="obj-7" data-id="7" aria-pressed="false"><span class="id">ID 7</span><span>The harbor on the right side of the image, with a large dock area.</span></button>
+          </div>
+        </div>
+        <div>
+          <p class="sub-h">Questions and benchmark answers</p>
+          <div class="qa-list">
+            <details class="qa"><summary>How many harbors are visible?</summary><p class="ans">3</p></details>
+            <details class="qa"><summary>What is the object located furthest to the top?</summary><p class="ans">Small vehicle</p></details>
+            <details class="qa"><summary>Are the visible vehicles near water?</summary><p class="ans">No</p></details>
+          </div>
+        </div>
+        <div>
+          <p class="sub-h">Caption, in short</p>
+          <p>A waterfront with homes, lawns and driveways, three harbors along the shore, a ship docked at the bottom edge, and small vehicles parked near the houses.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt" id="results" aria-labelledby="res-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Results</p>
+      <h2 id="res-h">How each model did, question type by question type</h2>
+      <p>Every model answered the same 1,000 VRSBench test questions. Toggle models on the right to compare them on each question type.</p>
+    </div>
+    <div class="charts">
+      <div class="card">
+        <h3>Overall accuracy</h3>
+        <p class="cap">Exact match, 1,000 test questions</p>
+        <div class="lb" id="leaderboard"></div>
+      </div>
+      <div class="card">
+        <h3>By question type</h3>
+        <p class="cap">n = number of questions of that type in the sample</p>
+        <div class="toggles" id="toggles" role="group" aria-label="Models shown"></div>
+        <div class="pt" id="pertype"></div>
+      </div>
+    </div>
+    <div class="chart-notes">
+      <p>Exact match is strict: “aircraft” for “airplane” counts as wrong. An LLM judge that accepts synonyms scores the 7B + QLoRA model at 66.7%, the 7B zero-shot model at 62.6% and the 7B + boxes model at 58.2%. Per-type results for the 7B + QLoRA model are not shown here.</p>
+      <p>Baselines: always answering the most common answer for each question type scores 34.5% (full test split); random guessing scores 23.1%.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="answers" aria-labelledby="ans-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Real answers</p>
+      <h2 id="ans-h">Before and after, straight from the evaluation</h2>
+      <p>Each card is a real question from the test sample, with the benchmark answer and what the models said. VRSBench image IDs are shown so results can be traced.</p>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter examples"></div>
+    <p class="ex-summary" id="ex-summary"></p>
+    <div class="ex-grid" id="examples"></div>
+  </div>
+</section>
+
+<section class="band alt" id="learned" aria-labelledby="learn-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What I learned</p>
+      <h2 id="learn-h">The results that shaped the next steps</h2>
+    </div>
+    <div class="learn">
+      <div class="item"><span class="fig">94 fixed · 29 broken</span><h3>Fine-tuning pays off at both sizes</h3><p>QLoRA lifted the 3B model from 44.3% to 50.8% and the 7B model from 51.3% to 56.7%. For the 3B, much of the gain is counting, and part of it is learning the benchmark’s short answer style; its reasoning score dropped from 71.0% to 61.3%.</p></div>
+      <div class="item"><span class="fig">74 fixed · 97 broken</span><h3>Naive box prompts are a mixed blessing</h3><p>Adding detector boxes helped size questions (+19.2 points) but hurt counting (−5.8) and position (−9.9), so overall accuracy fell from 51.3% to 49.0%. How boxes are passed to the model needs to change.</p></div>
+      <div class="item"><span class="fig">1 in 5</span><h3>The detector often finds nothing</h3><p>For 19.7% of questions Grounding DINO returned no box at all. These misses are the main failure mode to fix.</p></div>
+      <div class="item"><span class="fig">75% precise · 17% recall</span><h3>The self-check is careful but cautious</h3><p>When it flags an answer it is usually right, but it catches only about one in six wrong answers. Temperature scaling reduced calibration error from 0.479 to 0.413 (ECE).</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="roadmap" aria-labelledby="road-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Roadmap</p>
+      <h2 id="road-h">From prototype to a tool people can use</h2>
+    </div>
+    <div class="road">
+      <div class="phase"><span class="when">Now</span><h3>Working prototype</h3><p>12 question types, running offline in 4-bit on an 8 GB laptop GPU, with a demo app that draws the detected boxes.</p></div>
+      <div class="phase"><span class="when">Next</span><h3>Better grounding</h3><p>Fix detector misses, pass boxes to the model more carefully, and evaluate the full pipeline on the whole test set.</p></div>
+      <div class="phase"><span class="when">Then</span><h3>Real-world pilots</h3><p>Adapt to flood and disaster imagery, then offer a web demo and an API for councils, NGOs and emergency services.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="contact" aria-labelledby="cta-h" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta">
+      <div>
+        <h2 id="cta-h">Partner with us</h2>
+        <p>Looking for pilot partners, disaster imagery and GPU compute. Feedback from remote-sensing and emergency-response teams is very welcome.</p>
+        <div class="links">
+          <a href="https://github.com/Atharvauk/VRSBench-VQA-Grounded-Question-Answering-for-Remote-Sensing" target="_blank" rel="noopener">Code on GitHub</a>
+          <a href="https://vrsbench.github.io" target="_blank" rel="noopener">VRSBench project page</a>
+          <a href="https://arxiv.org/abs/2406.12384" target="_blank" rel="noopener">VRSBench paper</a>
+          <a href="https://arxiv.org/abs/2502.13923" target="_blank" rel="noopener">Qwen2.5-VL report</a>
+        </div>
+      </div>
+      <div class="email-box">
+        <span class="email" id="email">atharvauk1000@gmail.com</span>
+        <button class="copy" type="button" id="copy-email">Copy email</button>
+        <span class="copy-status" id="copy-status" aria-live="polite"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt" id="references" aria-labelledby="ref-h">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom:18px"><p class="eyebrow">References</p></div>
+    <ol class="refs">
+      <li>X. Li, J. Ding, M. Elhoseiny. VRSBench: A Versatile Vision-Language Benchmark Dataset for Remote Sensing Image Understanding. NeurIPS Datasets &amp; Benchmarks, 2024.</li>
+      <li>S. Bai et al. Qwen2.5-VL Technical Report. arXiv:2502.13923, 2025.</li>
+      <li>S. Liu et al. Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection. ECCV, 2024.</li>
+      <li>T. Dettmers et al. QLoRA: Efficient Finetuning of Quantized LLMs. NeurIPS, 2023.</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>OrbitAsk · MSc project by Atharva Kalase</span>
+    <span class="mono">Belfast · 54.58° N, 5.93° W</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const css = (v) => `var(${v})`;
+  const MODELS = [
+    { id: 'b3',  label: '3B base',             color: css('--bar-base') },
+    { id: 'ft3', label: '3B + QLoRA (ours)',   color: css('--accent') },
+    { id: 'zs7', label: '7B zero-shot',        color: css('--bar-7b') },
+    { id: 'gr7', label: '7B + detector boxes', color: css('--bar-7bbox') },
+  ];
+  const OVERALL = [
+    { label: '7B + QLoRA (ours)', v: 56.7, color: css('--accent'), ours: true },
+    { label: '7B zero-shot', v: 51.3, color: css('--bar-7b') },
+    { label: '3B + QLoRA (ours)', v: 50.8, color: css('--accent-2'), ours: true },
+    { label: '7B + detector boxes', v: 49.0, color: css('--bar-7bbox') },
+    { label: '3B base', v: 44.3, color: css('--bar-base') },
+    { label: 'Majority baseline', v: 34.5, color: css('--surface-2') },
+  ];
+  const TYPES = [
+    { k: 'Existence',     n: 208, zs7: 78.8, gr7: 76.0, b3: 85.6, ft3: 86.5 },
+    { k: 'Counting',      n: 174, zs7: 42.0, gr7: 36.2, b3: 8.0,  ft3: 31.0 },
+    { k: 'Category',      n: 156, zs7: 28.2, gr7: 29.5, b3: 25.6, ft3: 28.8 },
+    { k: 'Position',      n: 142, zs7: 43.7, gr7: 33.8, b3: 43.0, ft3: 49.3 },
+    { k: 'Colour',        n: 89,  zs7: 66.3, gr7: 67.4, b3: 57.3, ft3: 60.7 },
+    { k: 'Scene type',    n: 85,  zs7: 41.2, gr7: 43.5, b3: 36.5, ft3: 43.5 },
+    { k: 'Shape',         n: 40,  zs7: 42.5, gr7: 42.5, b3: 17.5, ft3: 22.5 },
+    { k: 'Reasoning',     n: 31,  zs7: 67.7, gr7: 64.5, b3: 71.0, ft3: 61.3 },
+    { k: 'Whole image',   n: 31,  zs7: 51.6, gr7: 48.4, b3: 48.4, ft3: 45.2 },
+    { k: 'Size',          n: 26,  zs7: 38.5, gr7: 57.7, b3: 50.0, ft3: 53.8 },
+    { k: 'Rural / urban', n: 10,  zs7: 80.0, gr7: 80.0, b3: 70.0, ft3: 80.0 },
+    { k: 'Direction',     n: 8,   zs7: 50.0, gr7: 37.5, b3: 50.0, ft3: 50.0 },
+  ];
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+  const pct = (v) => v.toFixed(1) + '%';
+
+  // leaderboard (scale: 0–60%)
+  const lb = document.getElementById('leaderboard');
+  OVERALL.forEach(r => {
+    const row = el('div', 'lb-row' + (r.ours ? ' ours' : ''));
+    row.append(el('span', 'name', r.label));
+    const track = el('div', 'track');
+    const w = (r.v / 60) * 82;
+    const bar = el('div', 'bar'); bar.style.width = w + '%'; bar.style.background = r.color;
+    if (r.label === 'Majority baseline') bar.style.outline = '1.5px solid var(--line)';
+    const val = el('span', 'bar-val num', pct(r.v)); val.style.left = w + '%';
+    track.append(bar, val); row.append(track); lb.append(row);
+  });
+
+  // per-type with toggles
+  let shown = { b3: true, ft3: true, zs7: true, gr7: false };
+  try { const saved = JSON.parse(localStorage.getItem('orbitask-models') || 'null'); if (saved) shown = Object.assign(shown, saved); } catch (e) {}
+  const toggles = document.getElementById('toggles');
+  const pt = document.getElementById('pertype');
+  MODELS.forEach(m => {
+    const b = el('button', 'toggle'); b.type = 'button'; b.id = 'toggle-' + m.id;
+    b.setAttribute('aria-pressed', String(!!shown[m.id]));
+    const sw = el('span', 'sw'); sw.style.background = m.color; sw.setAttribute('aria-hidden', 'true');
+    b.append(sw, document.createTextNode(m.label));
+    b.addEventListener('click', () => {
+      const on = Object.values(shown).filter(Boolean).length;
+      if (shown[m.id] && on === 1) return;
+      shown[m.id] = !shown[m.id];
+      b.setAttribute('aria-pressed', String(shown[m.id]));
+      try { localStorage.setItem('orbitask-models', JSON.stringify(shown)); } catch (e) {}
+      drawTypes();
+    });
+    toggles.append(b);
+  });
+  function drawTypes() {
+    pt.innerHTML = '';
+    TYPES.forEach(t => {
+      const row = el('div', 'pt-row');
+      row.append(el('span', 'name', `${t.k}<small>n = ${t.n}</small>`));
+      const bars = el('div', 'pt-bars');
+      MODELS.filter(m => shown[m.id]).forEach(m => {
+        const track = el('div', 'track');
+        const w = t[m.id] * 0.86;
+        const bar = el('div', 'bar'); bar.style.width = w + '%'; bar.style.background = m.color;
+        bar.title = `${m.label}: ${pct(t[m.id])}`;
+        const val = el('span', 'bar-val num', pct(t[m.id])); val.style.left = w + '%';
+        if (m.id === 'ft3') val.style.fontWeight = '700';
+        track.append(bar, val); bars.append(track);
+      });
+      row.append(bars); pt.append(row);
+    });
+  }
+  drawTypes();
+
+  // examples
+  const EX = [
+    { kind: 'qlora', id: '06463_0000', q: 'How many tennis courts are there?', gt: '2', a: ['3B base', 'Three.', false], b: ['3B + QLoRA', '2', true] },
+    { kind: 'qlora', id: 'P1508_0017', q: 'How many helicopters are present in the image?', gt: '1', a: ['3B base', 'Three', false], b: ['3B + QLoRA', '1', true] },
+    { kind: 'qlora', id: '07661_0000', q: 'How many overpasses are visible in the image?', gt: '2', a: ['3B base', 'Three', false], b: ['3B + QLoRA', '2', true] },
+    { kind: 'qlora', id: 'P1342_0039', q: 'How many storage tanks are clearly isolated from other structures?', gt: '2', a: ['3B base', 'Three', false], b: ['3B + QLoRA', '2', true] },
+    { kind: 'qlora', id: '07839_0000', q: 'Is the stadium located on the right or left side of the image?', gt: 'Right', a: ['3B base', 'left', false], b: ['3B + QLoRA', 'right', true] },
+    { kind: 'qlora', id: '09500_0000', q: 'Is the airplane positioned in the center of the image?', gt: 'No', a: ['3B base', 'Yes', false], b: ['3B + QLoRA', 'No', true] },
+    { kind: 'qlora', id: 'P2802_0011', q: 'What is the main structure in the image?', gt: 'Airport', a: ['3B base', 'A large building with a flat roof and a cylindrical structure.', false], b: ['3B + QLoRA', 'airport', true] },
+    { kind: 'qlora', id: '10505_0000', q: 'What prominent man-made structure is visible in the image?', gt: 'Windmill', a: ['3B base', 'Wind farm', false], b: ['3B + QLoRA', 'Windmill', true] },
+    { kind: 'boxes', id: '07268_0000', q: 'How many ships are visible?', gt: '1', a: ['7B, no boxes', '0', false], b: ['7B + 1 box', '1', true] },
+    { kind: 'boxes', id: 'P1854_0168', q: 'How many small vehicles can be seen?', gt: '1', a: ['7B, no boxes', '4', false], b: ['7B + 1 box', '1', true] },
+    { kind: 'boxes', id: '08152_0000', q: 'How many vehicles are visible near the top edge?', gt: '2', a: ['7B, no boxes', '3', false], b: ['7B + 2 boxes', '2', true] },
+    { kind: 'boxes', id: 'P0551_0008', q: 'Is there a ship present in the image?', gt: 'Yes', a: ['7B, no boxes', 'No', false], b: ['7B + 2 boxes', 'Yes', true] },
+    { kind: 'boxes', id: 'P1483_0004', q: 'What is the size of the plane as mentioned?', gt: 'small', a: ['7B, no boxes', 'Large', false], b: ['7B + 1 box', 'small', true] },
+    { kind: 'boxes', id: '09426_0000', q: 'What color is the top of the storage tank?', gt: 'White', a: ['7B, no boxes', 'black', false], b: ['7B + 2 boxes', 'white', true] },
+    { kind: 'boxes', id: '11404_0000', q: 'What is the color tone of the airport compared to its surroundings?', gt: 'lighter', a: ['7B, no boxes', 'Darker', false], b: ['7B + 1 box', 'lighter', true] },
+    { kind: 'hard', id: '06605_0000', q: 'How many windmills are visible in the image?', gt: '2', a: ['3B base', 'One', false], b: ['3B + QLoRA', '3 (confidence 0.63)', false], extra: [['7B zero-shot', '2', true], ['7B + 2 boxes', '2', true]] },
+  ];
+  const KINDS = [
+    { id: 'all', label: 'All', sum: 'A selection of real answers from the 1,000-question sample.' },
+    { id: 'qlora', label: 'Fixed by fine-tuning', sum: 'Across the sample, QLoRA fine-tuning fixed 94 of the 3B model’s answers and broke 29.' },
+    { id: 'boxes', label: 'Fixed by detector boxes', sum: 'Across the sample, adding detector boxes fixed 74 of the 7B model’s answers and broke 97, which is why box fusion is the next thing to improve.' },
+    { id: 'hard', label: 'Still hard', sum: 'Counting is still the weakest skill for the small model.' },
+  ];
+  let kind = 'all';
+  try { const h = (location.hash || '').slice(1); if (['qlora', 'boxes', 'hard'].includes(h)) kind = h; } catch (e) {}
+  const filters = document.getElementById('filters');
+  const exGrid = document.getElementById('examples');
+  const exSum = document.getElementById('ex-summary');
+  const KIND_LABEL = { qlora: 'Fixed by fine-tuning', boxes: 'Fixed by detector boxes', hard: 'Still hard' };
+  KINDS.forEach(k => {
+    const b = el('button', 'filter'); b.type = 'button'; b.id = 'filter-' + k.id;
+    const count = k.id === 'all' ? EX.length : EX.filter(e => e.kind === k.id).length;
+    b.innerHTML = `${k.label}<span class="c num">${count}</span>`;
+    b.addEventListener('click', () => { kind = k.id; drawExamples(); });
+    filters.append(b);
+  });
+  const ans = (label, text, ok) => `<dt>${label}</dt><dd class="${ok ? 'yes' : 'no'}">“${text}”<span class="mark">${ok ? '✓' : '✗'}</span></dd>`;
+  function drawExamples() {
+    [...filters.children].forEach(b => b.setAttribute('aria-pressed', String(b.id === 'filter-' + kind)));
+    exSum.textContent = KINDS.find(k => k.id === kind).sum;
+    exGrid.innerHTML = '';
+    EX.filter(e => kind === 'all' || e.kind === kind).forEach(e => {
+      const card = el('article', 'ex');
+      let dl = `<dt>Truth</dt><dd><strong>${e.gt}</strong></dd>` + ans(e.a[0], e.a[1], e.a[2]) + ans(e.b[0], e.b[1], e.b[2]);
+      (e.extra || []).forEach(x => { dl += ans(x[0], x[1], x[2]); });
+      card.innerHTML = `<div class="top"><span class="kind">${KIND_LABEL[e.kind]}</span><span class="img-id">${e.id}.png</span></div><p class="q">${e.q}</p><dl>${dl}</dl>`;
+      exGrid.append(card);
+    });
+  }
+  drawExamples();
+
+  // object highlights
+  const scene = document.getElementById('scene');
+  const boxes = scene.querySelectorAll('.hl');
+  document.querySelectorAll('.objref').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const on = btn.getAttribute('aria-pressed') !== 'true';
+      document.querySelectorAll('.objref').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      boxes.forEach(b => b.classList.remove('on'));
+      if (on) {
+        btn.setAttribute('aria-pressed', 'true');
+        scene.querySelector(`.hl[data-id="${id}"]`).classList.add('on');
+      }
+    });
+  });
+
+  // copy email
+  const status = document.getElementById('copy-status');
+  document.getElementById('copy-email').addEventListener('click', () => {
+    const text = document.getElementById('email').textContent.trim();
+    const fallback = () => {
+      const r = document.createRange(); r.selectNodeContents(document.getElementById('email'));
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      status.textContent = 'Selected. Press Ctrl+C or Cmd+C to copy.';
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => { status.textContent = 'Copied to clipboard.'; }, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
+
+</body>
+</html>
